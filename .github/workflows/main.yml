@@ -2,9 +2,12 @@ name: Microservices CI/CD
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
+
+permissions:
+  id-token: write   # Required for OIDC
+  contents: read    # Required for checkout
 
 jobs:
   deploy:
@@ -12,73 +15,68 @@ jobs:
 
     env:
       AWS_REGION: us-west-2
-      ECR_ACCOUNT: 986778210363
-      KUBE_NAMESPACE: default  # change if you use a different namespace
+      ECR_ACCOUNT: "986778210363"
+      CLUSTER_NAME: eks-banking-cluster
 
     steps:
-      # 1️⃣ Checkout code
+      # 1️⃣ Checkout code (v4 for 2026)
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # 2️⃣ Configure AWS credentials
+      # 2️⃣ Configure AWS credentials (v4 for 2026 - OIDC Recommended)
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
+        uses: aws-actions/configure-aws-credentials@v4
         with:
+          # Replace with your IAM Role ARN for OIDC
+          # role-to-assume: arn:aws:iam::986778210363:role/GitHubActionRole
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # 3️⃣ Login to ECR
+      # 3️⃣ Login to ECR (v2 for 2026)
       - name: Login to Amazon ECR
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+        uses: aws-actions/amazon-ecr-login@v2
 
-      # 4️⃣ Build and push Docker images
+      # 4️⃣ Build and push Docker images with Caching
       - name: Build and Push Docker Images
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.registry }}
         run: |
           for service in accounts auth notification transactions; do
-            echo "=============================="
-            echo "Building Docker image for $service..."
-            docker build -t $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$service:latest ./Services/$service
-            echo "Pushing Docker image for $service..."
-            docker push $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$service:latest
-            echo "✅ $service image pushed successfully"
+            TAG="${ECR_REGISTRY}/$service:latest"
+            echo "Building $service..."
+            docker build \
+              --cache-from $TAG \
+              -t $TAG ./Services/$service
+            docker push $TAG
           done
 
-      # 5️⃣ Setup kubectl
+      # 5️⃣ Setup kubectl (v4 for 2026)
       - name: Setup kubectl
-        uses: azure/setup-kubectl@v3
+        uses: azure/setup-kubectl@v4
         with:
           version: 'v1.31.0'
 
       # 6️⃣ Configure kubeconfig
       - name: Configure kubeconfig
         run: |
-          aws eks update-kubeconfig --name eks-banking-cluster --region $AWS_REGION
-          echo "✅ kubeconfig configured"
+          aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
 
       # 7️⃣ Apply Kubernetes manifests
       - name: Apply Kubernetes Manifests
         run: |
-          echo "Applying Kubernetes manifests..."
           kubectl apply -f ./k8s/
-          echo "✅ All manifests applied"
 
-      # 8️⃣ Rollout deployments
+      # 8️⃣ Rollout deployments (Improved for reliability)
       - name: Restart and Rollout Deployments
         run: |
-          for deployment in accounts-service auth-service notification-service transactions-service; do
-            echo "------------------------------"
-            echo "Restarting deployment: $deployment"
-            kubectl rollout restart deployment $deployment
-            echo "Waiting for deployment $deployment to complete..."
-            kubectl rollout status deployment $deployment
-            echo "✅ $deployment is now ready"
+          SERVICES=("accounts-service" "auth-service" "notification-service" "transactions-service")
+          for deployment in "${SERVICES[@]}"; do
+            kubectl rollout restart deployment/$deployment
+            kubectl rollout status deployment/$deployment --timeout=120s
           done
 
-      # 9️⃣ List all pods
-      - name: List all pods
-        run: |
-          echo "Current pods in the cluster:"
-          kubectl get pods -o wide
-
+      # 9️⃣ Final health check
+      - name: List pods
+        run: kubectl get pods -o wide
