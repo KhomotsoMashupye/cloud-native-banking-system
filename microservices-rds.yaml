@@ -1,6 +1,5 @@
-##############################
+
 # 1. RDS Secret
-##############################
 apiVersion: v1
 kind: Secret
 metadata:
@@ -11,13 +10,13 @@ stringData:
   DB_PORT: "5432"
   DB_NAME: bankingdb
   DB_USER: postgres
-  DB_PASSWORD: MDIxMjIy
+  DB_PASSWORD: XXXXX
   DB_SSLMODE: "verify-full"
   DB_SSLROOTCERT: "/certs/global-bundle.pem"
 
-##############################
+
 # 2. ConfigMap for RDS SSL certificate
-##############################
+
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -29,9 +28,8 @@ data:
     ...paste your RDS CA cert here...
     -----END CERTIFICATE-----
 
-##############################
+
 # 3. Deployments
-##############################
 
 ---
 apiVersion: apps/v1
@@ -173,9 +171,9 @@ spec:
               - key: global-bundle.pem
                 path: global-bundle.pem
 
-##############################
+
 # 4. Services
-##############################
+
 ---
 apiVersion: v1
 kind: Service
