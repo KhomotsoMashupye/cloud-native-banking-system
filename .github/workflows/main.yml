@@ -1,0 +1,84 @@
+name: Microservices CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-west-2
+      ECR_ACCOUNT: 986778210363
+      KUBE_NAMESPACE: default  # change if you use a different namespace
+
+    steps:
+      # 1️⃣ Checkout code
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # 2️⃣ Configure AWS credentials
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 3️⃣ Login to ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      # 4️⃣ Build and push Docker images
+      - name: Build and Push Docker Images
+        run: |
+          for service in accounts auth notification transactions; do
+            echo "=============================="
+            echo "Building Docker image for $service..."
+            docker build -t $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$service:latest ./Services/$service
+            echo "Pushing Docker image for $service..."
+            docker push $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$service:latest
+            echo "✅ $service image pushed successfully"
+          done
+
+      # 5️⃣ Setup kubectl
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.31.0'
+
+      # 6️⃣ Configure kubeconfig
+      - name: Configure kubeconfig
+        run: |
+          aws eks update-kubeconfig --name eks-banking-cluster --region $AWS_REGION
+          echo "✅ kubeconfig configured"
+
+      # 7️⃣ Apply Kubernetes manifests
+      - name: Apply Kubernetes Manifests
+        run: |
+          echo "Applying Kubernetes manifests..."
+          kubectl apply -f ./k8s/
+          echo "✅ All manifests applied"
+
+      # 8️⃣ Rollout deployments
+      - name: Restart and Rollout Deployments
+        run: |
+          for deployment in accounts-service auth-service notification-service transactions-service; do
+            echo "------------------------------"
+            echo "Restarting deployment: $deployment"
+            kubectl rollout restart deployment $deployment
+            echo "Waiting for deployment $deployment to complete..."
+            kubectl rollout status deployment $deployment
+            echo "✅ $deployment is now ready"
+          done
+
+      # 9️⃣ List all pods
+      - name: List all pods
+        run: |
+          echo "Current pods in the cluster:"
+          kubectl get pods -o wide
+
