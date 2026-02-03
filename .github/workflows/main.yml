@@ -72,7 +72,7 @@ jobs:
       # 8️⃣ Deploy microservices
       - name: Deploy microservices
         run: |
-          DEPLOYMENTS=("accounts-service" "auth-service" "notification-service" "transactions-service")
+          DEPLOYMENTS=("accounts-service" "auth-service" "transactions-service")
           
           for DEPLOYMENT in "${DEPLOYMENTS[@]}"; do
             CONTAINER_NAME="${DEPLOYMENT%-service}"
