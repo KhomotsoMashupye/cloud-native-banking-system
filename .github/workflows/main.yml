@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write
+  id-token: write   # Needed for OIDC
   contents: read
 
 env:
@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      # 1️⃣ Checkout repo
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -30,11 +30,11 @@ jobs:
           role-to-assume: arn:aws:iam::986778210363:role/GitHubActions-EKS-Deploy
           aws-region: ${{ env.AWS_REGION }}
 
-      # 3️⃣ Login to ECR
+      # 3️⃣ Login to Amazon ECR
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      # 4️⃣ Build & push Docker images for all microservices
+      # 4️⃣ Build & push Docker images
       - name: Build and push Docker images
         run: |
           SERVICES=("accounts" "auth" "notifications" "transactions")
@@ -62,13 +62,19 @@ jobs:
         run: |
           aws eks update-kubeconfig --region $AWS_REGION --name eks-banking-cluster
 
-      # 7️⃣ Deploy each service to EKS
+      # 7️⃣ Test EKS access
+      - name: Test EKS access
+        run: |
+          kubectl config view
+          kubectl get nodes
+
+      # 8️⃣ Deploy microservices
       - name: Deploy microservices
         run: |
           SERVICES=("accounts" "auth" "notifications" "transactions")
           for SERVICE in "${SERVICES[@]}"; do
             echo "Deploying $SERVICE..."
-            IMAGE_URI="986778210363.dkr.ecr.us-west-2.amazonaws.com/$SERVICE:latest"
+            IMAGE_URI="${ECR_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com/$SERVICE:$(date +%Y%m%d%H%M%S)"
             kubectl set image deployment/$SERVICE $SERVICE=$IMAGE_URI -n default
             kubectl rollout status deployment/$SERVICE --timeout=5m
-            done
+          done
