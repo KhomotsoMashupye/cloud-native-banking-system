@@ -6,8 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write   # Needed for OIDC
-  contents: read
+  contents: read  # Only need checkout permissions now
 
 env:
   AWS_REGION: us-west-2
@@ -23,11 +22,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Configure AWS credentials via OIDC
+      # 2️⃣ Configure AWS credentials using keys
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::986778210363:role/GitHubActions-EKS-Deploy
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       # 3️⃣ Login to Amazon ECR
