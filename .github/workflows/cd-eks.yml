@@ -24,11 +24,11 @@ jobs:
           role-to-assume: arn:aws:iam::986778210363:role/GitHubActions-EKS-Deploy
           aws-region: us-west-2
 
-      # 3️⃣ Install kubectl
+      # 3️⃣ Install kubectl (fixed input)
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
         with:
-          kubectl-version: 'v1.30.0'
+          version: 'v1.30.0'
 
       # 4️⃣ Configure kubeconfig
       - name: Configure kubeconfig
@@ -36,7 +36,7 @@ jobs:
           aws eks update-kubeconfig --region us-west-2 --name eks-banking-cluster
           kubectl config get-contexts
 
-      # 5️⃣ Deploy application
+      # 5️⃣ Deploy application and verify rollout
       - name: Deploy and verify
         run: |
           echo "Applying Kubernetes manifests..."
