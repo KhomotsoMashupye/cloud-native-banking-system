@@ -1,4 +1,4 @@
-name: Microservices Docker CI/CD
+name: Microservices CI/CD – EKS
 
 on:
   push:
@@ -6,24 +6,63 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read  # Required for checkout
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-west-2
+  ECR_ACCOUNT: "986778210363"
+  IMAGE_NAME: "banking-service"
 
 jobs:
-  docker:
+  build-and-deploy:
     runs-on: ubuntu-latest
-
-    env:
-      AWS_REGION: us-west-2
-      ECR_ACCOUNT: "986778210363"
+    timeout-minutes: 30
 
     steps:
-      # 1️⃣ Checkout the code
-      - name: Checkout Repository
+      # 1️⃣ Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Configure AWS credentials
+      # 2️⃣ Configure AWS credentials via OIDC (No secrets needed!)
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::986778210363:role/GitHubActions-EKS-Deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      # 3️⃣ Log in to ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 4️⃣ Build and push Docker image
+      - name: Build and push Docker image
+        id: build-image
+        run: |
+          IMAGE_TAG=$(date +%Y%m%d%H%M%S)
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          docker build -t $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_NAME:$IMAGE_TAG .
+          docker push $ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_NAME:$IMAGE_TAG
+
+      # 5️⃣ Set up kubectl
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.30.0'
+
+      # 6️⃣ Configure kubeconfig
+      - name: Configure kubeconfig
+        run: |
+          aws eks update-kubeconfig --region $AWS_REGION --name eks-banking-cluster
+
+      # 7️⃣ Update Kubernetes deployment image
+      - name: Update deployment image
+        run: |
+          kubectl set image deployment/banking-service \
+            banking-service=$ECR_ACCOUNT.dkr.ecr.$AWS_REGION.amazonaws.com/$IMAGE_NAME:$IMAGE_TAG
+          kubectl rollout status deployment/banking-service --timeout=5m
+
+    
+          message: "❌ CI/CD deployment failed for banking-service!"
+          status: danger
