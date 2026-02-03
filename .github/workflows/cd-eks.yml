@@ -3,55 +3,49 @@ name: Production CD – EKS
 on:
   workflow_dispatch:
 
+permissions:
+  id-token: write   # Required for OIDC
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # Avoid stuck deployments
+    timeout-minutes: 20
 
     steps:
       # 1️⃣ Checkout code
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2️⃣ Configure AWS credentials
-      - name: Configure AWS Credentials
+      # 2️⃣ Configure AWS credentials via OIDC
+      - name: Configure AWS Credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::986778210363:role/GitHubActions-EKS-Deploy
           aws-region: us-west-2
 
-      # 3️⃣ Install kubectl (specific version)
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v3
+      # 3️⃣ Install kubectl
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
         with:
-          version: '1.30.0' # Pin a stable version
+          kubectl-version: 'v1.30.0'
 
-      # 4️⃣ Connect to EKS
+      # 4️⃣ Configure kubeconfig
       - name: Configure kubeconfig
         run: |
-          aws eks update-kubeconfig \
-            --region us-west-2 \
-            --name eks-banking-cluster
+          aws eks update-kubeconfig --region us-west-2 --name eks-banking-cluster
           kubectl config get-contexts
 
-      # 5️⃣ Apply Kubernetes manifests
-      - name: Deploy application
-        id: deploy
+      # 5️⃣ Deploy application
+      - name: Deploy and verify
         run: |
           echo "Applying Kubernetes manifests..."
           kubectl apply -f k8s/
-
-      # 6️⃣ Wait for rollout and rollback if failed
-      - name: Wait for deployment rollout
-        id: rollout
-        run: |
-          set -e
-          echo "Waiting for banking-service deployment to complete..."
-          if ! kubectl rollout status deployment/banking-service --timeout=3m; then
-            echo "❌ Rollout failed! Triggering rollback..."
+          
+          echo "Waiting for banking-service rollout..."
+          if ! kubectl rollout status deployment/banking-service --timeout=5m; then
+            echo "❌ Rollout failed! Rolling back..."
             kubectl rollout undo deployment/banking-service
+            kubectl rollout status deployment/banking-service # Wait for rollback
             exit 1
           fi
-
- 
