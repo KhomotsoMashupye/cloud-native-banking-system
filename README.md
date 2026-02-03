@@ -18,7 +18,7 @@ This project simulates a **cloud-native banking platform** with the following mi
 The system demonstrates **end-to-end DevOps and cloud practices**, from infrastructure provisioning to deployment, monitoring, and analytics.
 
 **Architecture Snapshot:**  
-
+![Architecture Snapshot](./Assets/Final banking design.drawio.png)
 
 ---
 
@@ -47,7 +47,7 @@ The system demonstrates **end-to-end DevOps and cloud practices**, from infrastr
 - **Grafana dashboards** for performance insights  
 
 **Monitoring Snapshot:**  
-![Monitoring Screenshot](./path-to-your-monitoring-screenshot.png)  
+![Monitoring Snapshot](./Assets/Cloud Native Banking System-1770031918690.png)
 
 ### Analytics Layer
 - S3 Data Lake for log and transactional data storage  
