@@ -68,6 +68,7 @@ jobs:
           SERVICES=("accounts" "auth" "notifications" "transactions")
           for SERVICE in "${SERVICES[@]}"; do
             echo "Deploying $SERVICE..."
-            kubectl set image deployment/$SERVICE $SERVICE=${!IMAGE_URI_$SERVICE} || true
-            kubectl rollout status deployment/$SERVICE --timeout=5m || true
-          done
+            IMAGE_URI="986778210363.dkr.ecr.us-west-2.amazonaws.com/$SERVICE:latest"
+            kubectl set image deployment/$SERVICE $SERVICE=$IMAGE_URI -n default
+            kubectl rollout status deployment/$SERVICE --timeout=5m
+            done
